@@ -126,6 +126,30 @@ body:not(.music-playing) .eq i { animation-play-state: paused; height: 30%; }
 body.has-mbar main { padding-bottom: 120px; }
 body.has-mbar .toast { bottom: 104px; }
 
+/* YouTube-player fallback window for music (must stay visible) */
+.myt { position: fixed; z-index: 95; right: 16px; bottom: 100px; width: 256px; aspect-ratio: 16/9; border-radius: 14px; overflow: hidden;
+  background: #000; box-shadow: 0 14px 40px rgba(0,0,0,.5); border: 1px solid var(--border); animation: pop .3s var(--ease); }
+.myt[hidden] { display: none; }
+.myt-label { position: absolute; z-index: 2; left: 8px; top: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
+@media (max-width: 900px) { .myt { right: 8px; bottom: calc(144px + env(safe-area-inset-bottom)); width: 200px; } }
+body.sheet-open .myt { top: calc(64px + env(safe-area-inset-top)); bottom: auto; right: 16px; width: 200px; }
+.myt.left { right: auto; left: calc(var(--nav-w) + 16px); }
+@media (max-width: 900px) { .myt.left { left: 8px; } }
+.myt-btns { position: absolute; z-index: 3; right: 6px; top: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .2s; }
+.myt:hover .myt-btns, .myt:focus-within .myt-btns, .myt.big .myt-btns { opacity: 1; }
+@media (hover: none) { .myt-btns { opacity: 1; } }
+.myt-b { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; font-size: 15px; line-height: 1; cursor: pointer; backdrop-filter: blur(6px); }
+.myt-b:hover { background: rgba(0,0,0,.85); transform: scale(1.08); }
+/* big, centred */
+.myt.big, body.sheet-open .myt.big { top: 50%; left: 50%; right: auto; bottom: auto; width: min(92vw, 1000px); transform: translate(-50%, -50%); z-index: 210; border-radius: 18px; }
+.myt.big .myt-label { display: none; }
+.myt.big { overflow: visible; background: transparent; border: 0; }
+.myt.big .yt-embed { border-radius: 18px; overflow: hidden; background: #000; }
+.myt.big .myt-btns { top: -46px; right: 0; }
+.myt.big .myt-b { width: 38px; height: 38px; font-size: 18px; background: rgba(255,255,255,.14); }
+.myt-shade { position: fixed; inset: 0; z-index: 205; background: rgba(5,4,10,.78); backdrop-filter: blur(6px); animation: viewIn .2s; }
+.myt-shade[hidden] { display: none; }
+
 /* Now playing sheet */
 .msheet { position: fixed; inset: 0; z-index: 90; overflow: hidden; background: #0a0910; color: #fff; opacity: 0; transform: translateY(40px); transition: opacity .3s, transform .4s var(--ease); }
 .msheet[hidden] { display: none; }

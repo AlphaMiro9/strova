@@ -119,6 +119,7 @@
       const idx = sources.indexOf(currentSource);
       const next = sources.slice(idx + 1).find(s => s.kind === 'file');
       if (next) { toastMsg('Wechsle auf ' + next.label); load(next, at, true); }
+      else if (opts.onFatal) { toastMsg('Wechsle auf den YouTube-Player'); setTimeout(() => opts.onFatal(at || 0), 0); }
       else showError('Video kann nicht abgespielt werden', 'Der Server hat den Stream abgelehnt. Wähle in den Einstellungen eine andere Instanz.');
     }
     function playSafe() {
@@ -446,7 +447,8 @@
 
     // ── Start ──
     const first = pickInitial();
-    if (!first) showError('Keine abspielbaren Streams', data.live ? 'Livestreams werden von dieser Instanz nicht unterstützt.' : 'Probiere eine andere Instanz in den Einstellungen.');
+    if (!first && opts.onFatal) setTimeout(() => opts.onFatal(opts.startAt || 0), 0);
+    else if (!first) showError('Keine abspielbaren Streams', data.live ? 'Livestreams werden von dieser Instanz nicht unterstützt.' : 'Probiere eine andere Instanz in den Einstellungen.');
     else load(first, opts.startAt || 0, opts.autoplay !== false);
     if (settings.captions && subs.length) setCaption(defaultCaption());
 

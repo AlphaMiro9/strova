@@ -237,11 +237,18 @@
       d = await Piped.streams(id);
     } catch (err) {
       if (token !== routeToken) return;
-      document.getElementById('playerHost').innerHTML = '';
-      document.getElementById('info').innerHTML = errorState(err);
-      document.getElementById('related').innerHTML = '';
-      bindRetry(() => route());
-      return;
+      // Every source is blocked → play with YouTube's official embedded player instead.
+      try {
+        d = Object.assign(await Piped.oembed(id), knownVideo(id) || {});
+        d.embedOnly = true;
+      } catch (e2) {
+        if (token !== routeToken) return;
+        document.getElementById('playerHost').innerHTML = '';
+        document.getElementById('info').innerHTML = errorState(err);
+        document.getElementById('related').innerHTML = '';
+        bindRetry(() => route());
+        return;
+      }
     }
     if (token !== routeToken) return;
     document.title = d.title + ' · Strova';
@@ -250,18 +257,21 @@
     const host = document.getElementById('playerHost');
     host.innerHTML = '';
     const pos = Store.settings().resume ? Store.position(id) : null;
-    const nextVideo = d.related[0];
-    player = StrovaPlayer.create(host, {
-      data: d,
-      startAt: startAt != null ? startAt : (pos ? pos.t : 0),
-      autoplay: true,
-      onEnded: (force) => {
-        if (nextVideo && (force || Store.settings().autoplayNext)) {
-          toast('Als Nächstes: ' + nextVideo.title);
-          location.hash = '#/watch/' + nextVideo.id;
-        }
-      },
-    });
+    const start = startAt != null ? startAt : (pos ? pos.t : 0);
+    const goNext = (force) => {
+      const nextVideo = d.related[0];
+      if (nextVideo && (force || Store.settings().autoplayNext)) {
+        toast('Als Nächstes: ' + nextVideo.title);
+        location.hash = '#/watch/' + nextVideo.id;
+      }
+    };
+    const startEmbed = (at) => {
+      if (player) player.destroy();
+      host.innerHTML = '';
+      player = embedPlayer(host, id, at, goNext);
+    };
+    if (d.embedOnly) startEmbed(start);
+    else player = StrovaPlayer.create(host, { data: d, startAt: start, autoplay: true, onEnded: goNext, onFatal: startEmbed });
     if (pos && startAt == null) toast('Weiter bei ' + fmt(pos.t));
 
     const subbed = Store.isSubbed(d.uploaderUrl);
@@ -272,9 +282,9 @@
       <h1 class="watch-title">${esc(d.title)}</h1>
       <div class="watch-bar">
         <div class="uploader">
-          <a href="#/channel/${esc(d.uploaderUrl)}"><img class="avatar" src="${esc(d.uploaderAvatar)}" alt="" referrerpolicy="no-referrer"></a>
-          <div><a href="#/channel/${esc(d.uploaderUrl)}"><b>${esc(d.uploaderName)}${d.verified ? ' ✓' : ''}</b></a><span class="sub">${d.subscribers > 0 ? num(d.subscribers) + ' Abonnenten' : ''}</span></div>
-          <button class="btn ${subbed ? '' : 'primary'}" id="subBtn">${subbed ? 'Abonniert ✓' : 'Abonnieren'}</button>
+          ${d.uploaderAvatar ? `<a href="#/channel/${esc(d.uploaderUrl)}"><img class="avatar" src="${esc(d.uploaderAvatar)}" alt="" referrerpolicy="no-referrer"></a>` : `<span class="avatar avatar-letter">${esc((d.uploaderName || '?').trim().charAt(0).toUpperCase())}</span>`}
+          <div>${d.uploaderUrl ? `<a href="#/channel/${esc(d.uploaderUrl)}"><b>${esc(d.uploaderName)}${d.verified ? ' ✓' : ''}</b></a>` : `<b>${esc(d.uploaderName)}</b>`}<span class="sub">${d.subscribers > 0 ? num(d.subscribers) + ' Abonnenten' : ''}</span></div>
+          ${d.uploaderUrl ? `<button class="btn ${subbed ? '' : 'primary'}" id="subBtn">${subbed ? 'Abonniert ✓' : 'Abonnieren'}</button>` : ''}
         </div>
         <div class="actions">
           <div class="reactions" role="group" aria-label="Wie fühlt sich das Video an?">
@@ -282,12 +292,12 @@
           </div>
           <button class="btn" id="saveBtn">${saved ? '🔖 Gespeichert' : '🔖 Später'}</button>
           <button class="btn" id="shareBtn">↗ Teilen</button>
-          <button class="btn" id="hideBtn" title="Videos dieses Kanals nicht mehr anzeigen">🚫 Kanal ausblenden</button>
+          ${d.uploaderUrl ? '<button class="btn" id="hideBtn" title="Videos dieses Kanals nicht mehr anzeigen">🚫 Kanal ausblenden</button>' : ''}
         </div>
       </div>
-      <div class="desc" id="desc"><b>${d.views >= 0 ? num(d.views) + ' Aufrufe' : ''}${d.uploadDate ? ' · ' + new Date(d.uploadDate).toLocaleDateString('de-DE') : ''}${d.likes > 0 ? ' · 👍 ' + num(d.likes) : ''}</b>\n${sanitizeDesc(d.description)}</div>`;
+      <div class="desc" id="desc" ${d.embedOnly && !d.description ? 'hidden' : ''}><b>${d.views >= 0 ? num(d.views) + ' Aufrufe' : ''}${d.uploadDate ? ' · ' + new Date(d.uploadDate).toLocaleDateString('de-DE') : ''}${d.likes > 0 ? ' · 👍 ' + num(d.likes) : ''}</b>\n${sanitizeDesc(d.description)}</div>`;
 
-    info.querySelector('#subBtn').addEventListener('click', (e) => {
+    if (info.querySelector('#subBtn')) info.querySelector('#subBtn').addEventListener('click', (e) => {
       const on = Store.toggleSub({ id: d.uploaderUrl, name: d.uploaderName, avatar: d.uploaderAvatar });
       e.currentTarget.textContent = on ? 'Abonniert ✓' : 'Abonnieren';
       e.currentTarget.classList.toggle('primary', !on);
@@ -305,7 +315,7 @@
         else { await navigator.clipboard.writeText(url); toast('Link kopiert'); }
       } catch (e) { /* cancelled */ }
     });
-    info.querySelector('#hideBtn').addEventListener('click', () => {
+    if (info.querySelector('#hideBtn')) info.querySelector('#hideBtn').addEventListener('click', () => {
       if (!confirm(`„${d.uploaderName}“ ausblenden? Videos dieses Kanals erscheinen dann nirgends mehr. Rückgängig in den Einstellungen.`)) return;
       Store.hideChannel({ id: d.uploaderUrl, name: d.uploaderName, avatar: d.uploaderAvatar });
       toast('Kanal ausgeblendet');
@@ -324,9 +334,60 @@
       if (!e.target.closest('a')) desc.classList.add('open');
     });
 
-    document.getElementById('related').innerHTML = d.related.length
-      ? `<h2 style="font-size:17px;margin:4px 0 4px">Als Nächstes</h2>` + d.related.map((v, i) => videoCard(v, i)).join('')
-      : '';
+    const showRelated = () => {
+      document.getElementById('related').innerHTML = d.related.length
+        ? `<h2 style="font-size:17px;margin:4px 0 4px">Als Nächstes</h2>` + d.related.map((v, i) => videoCard(v, i)).join('')
+        : '';
+    };
+    showRelated();
+    if (d.embedOnly) { // no related list from the source → find similar videos by title
+      Piped.search(d.title, 'videos').then(r => {
+        if (token !== routeToken) return;
+        d.related = r.items.filter(v => v.type === 'video' && v.id !== id).slice(0, 15);
+        showRelated();
+      }).catch(() => {});
+    }
+  }
+
+  /** Metadata we already know about a video from lists stored on this device. */
+  function knownVideo(id) {
+    const pools = [Store.history(), Store.saved(), Object.values(Store.reactions())];
+    if (window.Music) pools.push(Music.Library.liked().map(t => ({ id: t.id, title: t.title, uploaderName: t.artist, uploaderUrl: t.artistId, thumbnail: t.cover, duration: t.duration })));
+    for (const list of pools) { const v = list.find(x => x.id === id); if (v) { const o = {}; ['title', 'uploaderName', 'uploaderUrl', 'uploaderAvatar', 'thumbnail', 'duration'].forEach(k => { if (v[k]) o[k] = v[k]; }); return o; } }
+    return null;
+  }
+
+  /** Official YouTube embed in Strova's player frame (fallback when every source is blocked). */
+  function embedPlayer(host, id, start, onEnded) {
+    const wrap = document.createElement('div');
+    wrap.className = 'player embed-wrap';
+    host.appendChild(wrap);
+    toast('Server blockiert – spiele über den YouTube-Player');
+    const onMusic = () => yt.pause();
+    const yt = StrovaYT.create(wrap, {
+      id, start,
+      onEnded: () => { Store.setPosition(id, 0, 0); onEnded(); },
+      onState: (s) => { if (s === 1) window.dispatchEvent(new Event('strova:video-play')); },
+      onError: (msg) => {
+        const e = document.createElement('div');
+        e.className = 'p-error';
+        e.innerHTML = `<div><b>Video nicht abspielbar</b><span></span><br><br><a class="btn primary" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}">Auf YouTube öffnen</a></div>`;
+        e.querySelector('span').textContent = msg;
+        wrap.appendChild(e);
+      },
+    });
+    window.addEventListener('strova:music-play', onMusic);
+    const timer = setInterval(() => { if (yt.ready && yt.playing()) Store.setPosition(id, yt.time(), yt.duration()); }, 5000);
+    return {
+      seek(t) { yt.seek(t); yt.play(); },
+      destroy() {
+        clearInterval(timer);
+        window.removeEventListener('strova:music-play', onMusic);
+        if (yt.ready) Store.setPosition(id, yt.time(), yt.duration());
+        yt.destroy();
+        wrap.remove();
+      },
+    };
   }
 
   /** Piped descriptions are HTML – keep text, links and timestamps only. */
@@ -727,6 +788,10 @@
           <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="exp">Exportieren</button><button class="btn" id="imp">Importieren</button></span></div>
         <div class="row"><label><b>Alles zurücksetzen</b><small>Löscht Einstellungen, Abos, Verlauf, Musik-Bibliothek</small></label><button class="btn danger" id="reset">Zurücksetzen</button></div>
 
+        ${group('🔄', 'Updates')}
+        <div class="row"><label><b>Strova ${esc(window.STROVA_VERSION || '')}</b><small>${window.__TAURI__ ? 'Die App sucht beim Start automatisch nach Updates und installiert sie auf Wunsch selbst.' : 'Prüft, ob es eine neue Version gibt.'}</small></label>
+          <button class="btn primary" id="updBtn">Nach Updates suchen</button></div>
+
         ${group('⌨️', 'Tastenkürzel')}
         <div class="row"><label><small>Leertaste/K Pause · J/L ±10 s · ←/→ ±5 s · F Vollbild · M Ton · C Untertitel · I Bild im Bild · &lt;/&gt; Tempo · / Suche</small></label></div>
         <p class="sub" style="text-align:center;margin-top:10px">Strova ${esc(window.STROVA_VERSION || '')} · Inhalte stammen von YouTube und gehören ihren Urhebern. Strova ist nicht mit YouTube oder Google verbunden.</p>
@@ -786,6 +851,10 @@
         } catch (e) { toast('Datei konnte nicht gelesen werden'); }
       };
       inp.click();
+    });
+    document.getElementById('updBtn').addEventListener('click', async (e) => {
+      const b = e.currentTarget; b.disabled = true; b.textContent = 'Suche …';
+      try { await window.StrovaUpdate.check(true); } finally { b.disabled = false; b.textContent = 'Nach Updates suchen'; }
     });
     document.getElementById('reset').addEventListener('click', () => {
       if (!confirm('Wirklich alles zurücksetzen? Abos, Verlauf, Playlists und Einstellungen werden gelöscht.')) return;
@@ -917,7 +986,7 @@
     if (a && opener && /^https?:/i.test(a.href)) { e.preventDefault(); opener.openUrl(a.href); }
   });
 
-  window.STROVA_VERSION = '1.0.0';
+  window.STROVA_VERSION = '1.1.0';
   applyTheme();
   route();
 

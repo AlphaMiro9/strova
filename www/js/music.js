@@ -113,6 +113,63 @@
   radioBox.checked = radio;
   radioBox.addEventListener('change', () => { radio = radioBox.checked; LS.set('radio', radio); });
 
+  // ── Fallback: YouTube's official embedded player (when every server is blocked) ──
+  // Shown as a small visible video window above the mini bar; all controls keep working through it.
+  const ytBox = document.createElement('div');
+  ytBox.className = 'myt'; ytBox.hidden = true;
+  ytBox.innerHTML = `<span class="myt-label">▶ YouTube-Player</span>
+    <div class="myt-btns">
+      <button class="myt-b" data-y="side" title="Seite wechseln" aria-label="Fenster in die andere Ecke">⇆</button>
+      <button class="myt-b" data-y="size" title="Groß in der Mitte" aria-label="Groß in der Mitte anzeigen">⤢</button>
+    </div>`;
+  const ytShade = document.createElement('div');
+  ytShade.className = 'myt-shade'; ytShade.hidden = true;
+  document.body.append(ytShade, ytBox);
+  const setBig = (on) => {
+    ytBox.classList.toggle('big', on);
+    ytShade.hidden = !on;
+    const b = ytBox.querySelector('[data-y="size"]');
+    b.textContent = on ? '⤡' : '⤢';
+    b.title = on ? 'Verkleinern' : 'Groß in der Mitte';
+  };
+  ytBox.querySelector('.myt-btns').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-y]'); if (!b) return;
+    if (b.dataset.y === 'size') setBig(!ytBox.classList.contains('big'));
+    if (b.dataset.y === 'side') ytBox.classList.toggle('left');
+  });
+  ytShade.addEventListener('click', () => setBig(false));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ytBox.classList.contains('big')) setBig(false); });
+  let yt = null, ytPoll = null, mode = 'audio';
+
+  function stopYT() {
+    if (yt) { yt.destroy(); yt = null; }
+    clearInterval(ytPoll); ytPoll = null;
+    ytBox.hidden = true;
+    ytBox.classList.remove('big'); ytShade.hidden = true;
+  }
+  function startYT(t) {
+    stopYT();
+    audio.pause(); audio.removeAttribute('src');
+    mode = 'yt';
+    ytBox.hidden = false;
+    yt = StrovaYT.create(ytBox, {
+      id: t.id,
+      onState: (s) => { if (s === 1) window.dispatchEvent(new Event('strova:music-play')); renderPlayState(); if (s === 1) bar.classList.remove('loading'); },
+      onEnded: () => next(true),
+      onError: () => { window.toast && window.toast('„' + t.title + '“ nicht abspielbar – nächster Song'); setTimeout(() => next(true), 800); },
+    });
+    ytPoll = setInterval(updateTime, 500);
+  }
+  // One interface for both engines
+  const eng = {
+    paused: () => (mode === 'yt' ? !(yt && yt.playing()) : audio.paused),
+    play: () => (mode === 'yt' ? yt && yt.play() : audio.play().catch(() => {})),
+    pause: () => (mode === 'yt' ? yt && yt.pause() : audio.pause()),
+    time: () => (mode === 'yt' ? (yt ? yt.time() : 0) : audio.currentTime),
+    duration: () => (mode === 'yt' ? (yt ? yt.duration() : 0) : audio.duration),
+    seek: (s) => { if (mode === 'yt') { yt && yt.seek(s); } else audio.currentTime = s; },
+  };
+
   // ── Stream resolution ──
   async function audioUrl(id) {
     if (streamCache.has(id)) return streamCache.get(id);
@@ -146,23 +203,24 @@
     render();
     window.dispatchEvent(new Event('strova:music-play'));
     bar.classList.add('loading');
-    try {
-      const s = await audioUrl(t.id);
-      if (loadingId !== t.id) return;
-      if (!s.url) throw new Error('Kein Audiostream');
+    let s = null;
+    try { s = await audioUrl(t.id); } catch (e) { s = null; }
+    if (loadingId !== t.id) return;
+    if (s && s.url) {
+      stopYT(); mode = 'audio';
       if (!t.duration && s.duration) t.duration = s.duration;
       audio.src = s.url;
       audio.dataset.fallback = JSON.stringify(s.fallback);
       if (autoplay) await audio.play().catch(() => {});
-      Library.addRecent(t);
-      updateMediaSession();
-      prefetchNext();
-      if (radio && index >= queue.length - 2) extendRadio();
-    } catch (e) {
-      if (loadingId !== t.id) return;
-      window.toast && window.toast('„' + t.title + '“ nicht abspielbar – nächster Song');
-      setTimeout(() => next(true), 800);
-    } finally { if (loadingId === t.id) bar.classList.remove('loading'); }
+      bar.classList.remove('loading');
+    } else {
+      // every server blocked → official YouTube player
+      startYT(t);
+    }
+    Library.addRecent(t);
+    updateMediaSession();
+    prefetchNext();
+    if (radio && index >= queue.length - 2) extendRadio();
   }
 
   function prefetchNext() {
@@ -202,17 +260,17 @@
   }
   function toggle() {
     if (!current()) return;
-    if (audio.paused) { window.dispatchEvent(new Event('strova:music-play')); audio.play().catch(() => {}); } else audio.pause();
+    if (eng.paused()) { window.dispatchEvent(new Event('strova:music-play')); eng.play(); } else eng.pause();
   }
   function next(auto) {
     if (!queue.length) return;
-    if (auto && repeat === 'one') { audio.currentTime = 0; audio.play(); return; }
+    if (auto && repeat === 'one') { eng.seek(0); eng.play(); return; }
     if (index + 1 < queue.length) loadIndex(index + 1);
     else if (repeat === 'all') loadIndex(0);
     else if (radio) { extendRadio().then(() => { if (index + 1 < queue.length) loadIndex(index + 1); }); }
   }
   function prev() {
-    if (audio.currentTime > 4 || index === 0) { audio.currentTime = 0; return; }
+    if (eng.time() > 4 || index === 0) { eng.seek(0); return; }
     loadIndex(index - 1);
   }
 
@@ -239,7 +297,7 @@
     document.querySelectorAll('[data-track-id]').forEach(el => el.classList.toggle('playing', el.dataset.trackId === t.id));
   }
   function renderPlayState() {
-    const playing = !audio.paused;
+    const playing = !eng.paused();
     $all('.m-play').forEach(b => { b.innerHTML = playing ? ICON.pause : ICON.play; b.setAttribute('aria-label', playing ? 'Pause' : 'Abspielen'); });
     sheet.classList.toggle('is-playing', playing);
     document.body.classList.toggle('music-playing', playing);
@@ -253,13 +311,13 @@
     const now = ol.querySelector('.now'); if (now) now.scrollIntoView({ block: 'nearest' });
   }
   function updateTime() {
-    const d = audio.duration || (current() && current().duration) || 0;
-    const p = d ? audio.currentTime / d : 0;
+    const d = eng.duration() || (current() && current().duration) || 0;
+    const p = d ? eng.time() / d : 0;
     bar.querySelector('.mbar-progress i').style.width = p * 100 + '%';
     if (!seek.dragging) seek.value = Math.round(p * 1000);
     seek.style.setProperty('--p', p * 100 + '%');
     const times = sheet.querySelectorAll('.m-times span');
-    times[0].textContent = fmt(audio.currentTime); times[1].textContent = fmt(d);
+    times[0].textContent = fmt(eng.time()); times[1].textContent = fmt(d);
   }
   function updateMediaSession() {
     const t = current(); if (!t || !('mediaSession' in navigator)) return;
@@ -269,7 +327,7 @@
       navigator.mediaSession.setActionHandler('pause', toggle);
       navigator.mediaSession.setActionHandler('nexttrack', () => next());
       navigator.mediaSession.setActionHandler('previoustrack', prev);
-      navigator.mediaSession.setActionHandler('seekto', (e) => { audio.currentTime = e.seekTime; });
+      navigator.mediaSession.setActionHandler('seekto', (e) => { eng.seek(e.seekTime); });
     } catch (e) {}
   }
 
@@ -283,6 +341,7 @@
   audio.addEventListener('loadedmetadata', updateTime);
   audio.addEventListener('ended', () => next(true));
   audio.addEventListener('error', () => {
+    if (mode === 'yt' || !audio.getAttribute('src')) return;
     let fb = []; try { fb = JSON.parse(audio.dataset.fallback || '[]'); } catch (e) {}
     if (fb.length) { audio.dataset.fallback = JSON.stringify(fb.slice(1)); audio.src = fb[0]; audio.play().catch(() => {}); }
     else if (current()) { window.toast && window.toast('Stream-Fehler – nächster Song'); setTimeout(() => next(true), 600); }
@@ -326,8 +385,8 @@
     window.toast && window.toast({ off: 'Wiederholen aus', all: 'Alle wiederholen', one: 'Song wiederholen' }[repeat]);
   }));
   sheet.querySelector('.m-add').addEventListener('click', () => { const t = current(); if (t) Music.pickPlaylist(t); });
-  seek.addEventListener('input', () => { seek.dragging = true; const d = audio.duration || 0; sheet.querySelector('.m-times span').textContent = fmt(d * seek.value / 1000); seek.style.setProperty('--p', seek.value / 10 + '%'); });
-  seek.addEventListener('change', () => { const d = audio.duration || 0; audio.currentTime = d * seek.value / 1000; seek.dragging = false; });
+  seek.addEventListener('input', () => { seek.dragging = true; const d = eng.duration() || 0; sheet.querySelector('.m-times span').textContent = fmt(d * seek.value / 1000); seek.style.setProperty('--p', seek.value / 10 + '%'); });
+  seek.addEventListener('change', () => { const d = eng.duration() || 0; eng.seek(d * seek.value / 1000); seek.dragging = false; });
 
   // swipe down to close the sheet on phones
   let startY = null;
@@ -342,7 +401,7 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen) closeSheet(); });
 
   // pause music when a video starts, and vice versa
-  window.addEventListener('strova:video-play', () => { if (!audio.paused) audio.pause(); });
+  window.addEventListener('strova:video-play', () => { if (!eng.paused()) eng.pause(); });
   window.addEventListener('strova:music-lib', render);
   window.addEventListener('hashchange', () => { if (sheetOpen) closeSheet(); });
 
@@ -350,7 +409,7 @@
     ICON, Library, track,
     play, playNext, addToQueue, toggle,
     current: () => current(),
-    isPlaying: () => !audio.paused,
+    isPlaying: () => !eng.paused(),
     /** Simple dialog to pick or create a playlist for a track */
     pickPlaylist(t) {
       const lists = Library.playlists();

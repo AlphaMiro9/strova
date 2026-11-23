@@ -1,6 +1,6 @@
 [package]
 name = "strova"
-version = "1.0.0"
+version = "1.1.0"
 description = "Strova – YouTube & Musik ohne Tracking"
 license = "MIT"
 edition = "2021"
@@ -17,6 +17,13 @@ tauri = { version = "2", features = [] }
 # native-tls uses the OS TLS stack (SChannel/SecureTransport/OpenSSL) – no clang needed for Windows ARM64 builds
 tauri-plugin-http = { version = "2", default-features = false, features = ["native-tls", "charset", "http2"] }
 tauri-plugin-opener = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# Signed in-app updates (native-tls → no clang needed on Windows ARM64)
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls"] }
 
 [profile.release]
 codegen-units = 1

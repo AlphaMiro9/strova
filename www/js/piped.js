@@ -2,8 +2,10 @@
    Both backends are normalised into the same shapes, so the rest of the app doesn't care which is used. */
 (function () {
   const FALLBACK = {
+    // ordered by what actually delivered streams in the last scan (Nov 2026)
     piped: [
       'https://api.piped.private.coffee',
+      'https://pipedapi.ducks.party',
       'https://pipedapi.kavin.rocks',
       'https://pipedapi.adminforge.de',
       'https://pipedapi.leptons.xyz',
@@ -13,6 +15,8 @@
       'https://pipedapi.drgns.space',
     ],
     invidious: [
+      'https://invidious.protokolla.fi',
+      'https://inv.in.projectsegfau.lt',
       'https://inv.nadeko.net',
       'https://invidious.nerdvpn.de',
       'https://yewtu.be',
@@ -69,25 +73,26 @@
   }
 
   /** GET on the current instance; on server errors tries other instances and keeps the one that works. */
-  async function api(path, b = backend()) {
+  async function api(path, b = backend(), quick = false) {
     const current = baseOf(b);
     try {
-      return await fetchJson(current + path);
+      return await fetchJson(current + path, quick ? 6000 : 10000);
     } catch (err) {
-      if (err.status && err.status < 500 && err.status !== 429 && err.status !== 403) throw err;
-      const list = (await instances(b)).map(i => i.url);
-      const candidates = [...new Set([...FALLBACK[b], ...list])].filter(u => u !== current).slice(0, 6);
-      for (const base of candidates) {
-        try {
-          const data = await fetchJson(base + path, 9000);
-          Store.setSetting(settingKey(b), base);
-          window.dispatchEvent(new CustomEvent('strova:instance', { detail: base }));
-          return data;
-        } catch (e) { /* next */ }
-      }
-      throw err;
+      if (quick || (err.status && err.status < 500 && err.status !== 429 && err.status !== 403)) throw err;
+      // In the apps every server is reachable, so also use the live server list; in a browser only the known ones.
+      const list = isNativeApp ? (await instances(b)).map(i => i.url) : [];
+      const candidates = [...new Set([...FALLBACK[b], ...list])].filter(u => u !== current).slice(0, 8);
+      // ask all other servers at once and take the first good answer
+      try {
+        const { base, data } = await Promise.any(candidates.map(base => fetchJson(base + path, 6000).then(data => ({ base, data }))));
+        Store.setSetting(settingKey(b), base);
+        window.dispatchEvent(new CustomEvent('strova:instance', { detail: base }));
+        return data;
+      } catch (e) { throw err; }
     }
   }
+  // When YouTube blocks all servers, remember it for a few minutes so videos start instantly via the embed.
+  let blockedUntil = 0;
 
   const idFromUrl = (u) => {
     if (!u) return '';
@@ -133,8 +138,8 @@
       return { items: (d.items || []).map(P.item).filter(Boolean), nextpage: d.nextpage || null };
     },
     async suggestions(q) { return fetchJson(baseOf('piped') + '/suggestions?query=' + encodeURIComponent(q), 4000); },
-    async streams(id) {
-      const d = await api('/streams/' + encodeURIComponent(id));
+    async streams(id, quick) {
+      const d = await api('/streams/' + encodeURIComponent(id), 'piped', quick);
       return {
         id, title: d.title, description: d.description || '', uploadDate: d.uploadDate,
         uploaderName: d.uploader, uploaderUrl: idFromUrl(d.uploaderUrl), uploaderAvatar: hiAvatar(d.uploaderAvatar), verified: !!d.uploaderVerified,
@@ -209,8 +214,8 @@
       const d = await fetchJson(baseOf('invidious') + '/api/v1/search/suggestions?q=' + encodeURIComponent(q), 4000);
       return (d.suggestions || []).map(s => s.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
     },
-    async streams(id) {
-      const d = await api(`/api/v1/videos/${encodeURIComponent(id)}?local=true`);
+    async streams(id, quick) {
+      const d = await api(`/api/v1/videos/${encodeURIComponent(id)}?local=true`, 'invidious', quick);
       return {
         id, title: d.title, description: (d.descriptionHtml || d.description || '').replace(/\n/g, '<br>'),
         uploadDate: d.published ? new Date(d.published * 1000).toISOString() : '',
@@ -272,7 +277,33 @@
     async trending(region) { return (await impl().trending(region)).filter(visible); },
     async search(q, filter = 'all', nextpage) { const r = await impl().search(q, filter, nextpage); r.items = r.items.filter(visible); return r; },
     async suggestions(q) { try { return await impl().suggestions(q); } catch (e) { return []; } },
-    async streams(id) { const d = await impl().streams(id); d.related = d.related.filter(visible); return d; },
+    /** Stream data; if the chosen source is blocked by YouTube, the other source is tried too. */
+    async streams(id) {
+      let d;
+      if (Date.now() < blockedUntil) {
+        // recently everything was blocked → one quick try, then let the caller use the embed
+        d = await impl().streams(id, true);
+      } else {
+        try { d = await impl().streams(id); }
+        catch (err) {
+          // the other source – in a browser only if it is Piped (public Invidious servers refuse browser access)
+          const other = backend() === 'invidious' ? P : (isNativeApp ? I : null);
+          try { if (!other) throw err; d = await other.streams(id); }
+          catch (e2) { blockedUntil = Date.now() + 4 * 60 * 1000; err.blocked = true; throw err; }
+        }
+      }
+      blockedUntil = 0;
+      d.related = d.related.filter(visible);
+      return d;
+    },
+    /** Basic info for any video via YouTube's public oEmbed endpoint (used when no source can deliver streams). */
+    async oembed(id) {
+      const d = await fetchJson('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id), 6000);
+      return {
+        id, title: d.title, uploaderName: d.author_name, uploaderUrl: '', uploaderAvatar: '',
+        thumbnail: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`, description: '', views: -1, duration: 0, related: [], embedOnly: true,
+      };
+    },
     async channel(id, nextpage) {
       // "search:<name>:<page>" marks pagination of the search fallback below
       if (nextpage && nextpage.startsWith('search:')) {

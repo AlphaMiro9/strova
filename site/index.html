@@ -153,6 +153,42 @@
     <p class="small">Strova ist nicht mit YouTube, Google oder Spotify verbunden. Alle Inhalte gehören ihren Urhebern.</p>
   </footer>
 
+  <!-- Download wizard -->
+  <div class="wiz" id="wizard" hidden>
+    <div class="wiz-box" role="dialog" aria-modal="true" aria-labelledby="wizTitle">
+      <button class="wiz-x" data-wiz="close" aria-label="Schließen">✕</button>
+      <ol class="wiz-steps" aria-hidden="true"><li data-s="1">Gerät</li><li data-s="2">Download</li><li data-s="3">Installieren</li></ol>
+
+      <section class="wiz-page" data-page="1">
+        <h3 id="wizTitle">Auf welchem Gerät willst du Strova nutzen?</h3>
+        <p class="wiz-sub">Wir haben dein Gerät erkannt – du kannst aber auch ein anderes wählen.</p>
+        <div class="wiz-os" id="wizOs"></div>
+      </section>
+
+      <section class="wiz-page" data-page="2" hidden>
+        <div class="wiz-dl-anim"><span class="wiz-arrow">⬇</span></div>
+        <h3>Dein Download startet …</h3>
+        <p class="wiz-sub" id="wizFile">Strova wird vorbereitet.</p>
+        <div class="wiz-bar"><i></i></div>
+        <p class="wiz-small">Startet nicht? <a id="wizManual" href="#" rel="noopener">Hier direkt herunterladen</a></p>
+        <div class="wiz-nav"><button class="btn ghost" data-wiz="back">Zurück</button><button class="btn primary" data-wiz="next">Weiter zur Installation</button></div>
+      </section>
+
+      <section class="wiz-page" data-page="3" hidden>
+        <h3>So installierst du Strova</h3>
+        <ol class="wiz-howto" id="wizHowto"></ol>
+        <div class="wiz-nav"><button class="btn ghost" data-wiz="back">Zurück</button><button class="btn primary" data-wiz="done">Fertig 🎉</button></div>
+      </section>
+
+      <section class="wiz-page" data-page="4" hidden>
+        <div class="wiz-done">🎉</div>
+        <h3>Viel Spaß mit Strova!</h3>
+        <p class="wiz-sub">Die App sucht künftig selbst nach Updates – du bist immer auf dem neuesten Stand.</p>
+        <div class="wiz-nav"><a class="btn primary" href="app/">Web-App öffnen</a><button class="btn ghost" data-wiz="close">Schließen</button></div>
+      </section>
+    </div>
+  </div>
+
   <script src="site.js"></script>
 </body>
 </html>

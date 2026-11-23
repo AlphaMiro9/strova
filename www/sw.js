@@ -1,8 +1,8 @@
 /* Strova service worker – caches the app shell so it opens offline and fast */
-const CACHE = 'strova-v1.0.0';
+const CACHE = 'strova-v1.1.0';
 const SHELL = [
   './', 'index.html', 'styles.css', 'music.css', 'manifest.webmanifest',
-  'js/store.js', 'js/piped.js', 'js/player.js', 'js/music.js', 'js/app.js', 'vendor/hls.min.js',
+  'js/store.js', 'js/piped.js', 'js/player.js', 'js/yt.js', 'js/update.js', 'js/music.js', 'js/app.js', 'vendor/hls.min.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

@@ -69,11 +69,22 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # signs the in-app updates (public key is in tauri.conf.json)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target ${{ matrix.target }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: 'Strova ${{ github.ref_name }}'
-          releaseBody: 'Downloads für Windows (x64/ARM64), macOS, Linux (x64/ARM64) und Android. Web-App: siehe README.'
+          releaseBody: |
+            ## Neu in Strova
+            - Videos und Musik spielen auch, wenn YouTube die Server blockiert (automatischer Wechsel)
+            - Automatische Updates in der Desktop-App
+            - Neuer Installations-Assistent für Windows
+
+            **Downloads:** Windows (x64 & ARM64), macOS, Linux (x64 & ARM64), Android (APK).
+            **Web-App & Website:** https://alphamiro9.github.io/strova/
+          includeUpdaterJson: true
           releaseDraft: false
           prerelease: false
 
