@@ -1,0 +1,12 @@
+{
+  "appId": "app.strova.player",
+  "appName": "Strova",
+  "webDir": "www",
+  "backgroundColor": "#0c0b12",
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

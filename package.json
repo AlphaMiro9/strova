@@ -1,0 +1,29 @@
+{
+  "name": "strova",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Strova – YouTube-Client über Piped mit eigenem Player und Stimmungen. Für Windows, macOS, Linux, Android und als Web-App.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/vendor.mjs",
+    "dev": "node scripts/serve.mjs",
+    "icons": "node scripts/icons.mjs",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "android:add": "cap add android",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android"
+  },
+  "dependencies": {
+    "hls.js": "1.5.13"
+  },
+  "devDependencies": {
+    "@capacitor/android": "6.1.2",
+    "@capacitor/cli": "6.1.2",
+    "@capacitor/core": "6.1.2",
+    "@resvg/resvg-js": "^2.6.2",
+    "@tauri-apps/cli": "^2.12.6"
+  }
+}
