@@ -894,6 +894,22 @@
   window.addEventListener('online', () => toast('Wieder online'));
   window.addEventListener('offline', () => toast('Keine Internetverbindung'));
 
+  // Sharp images: step down maxres → hq720 → hqdefault when a size doesn't exist.
+  // (YouTube answers a missing size with a tiny 120×90 grey placeholder instead of an error.)
+  function stepDown(img) {
+    const s = img.currentSrc || img.src;
+    let next = null;
+    if (/\/maxresdefault(_live)?\./.test(s)) next = s.replace(/\/maxresdefault(_live)?\./, '/hq720$1.');
+    else if (/\/hq720(_live)?\./.test(s)) next = s.replace(/\/hq720(_live)?\./, '/hqdefault$1.');
+    else if (/=s240(-|$)/.test(s) && !img.dataset.avfb) { img.dataset.avfb = '1'; next = s.replace(/=s240(-|$)/, '=s88$1'); }
+    if (next && next !== s) img.src = next;
+  }
+  document.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') stepDown(e.target); }, true);
+  document.addEventListener('load', (e) => {
+    const img = e.target;
+    if (img.tagName === 'IMG' && img.naturalWidth > 0 && img.naturalWidth <= 120 && /\/(maxresdefault|hq720)/.test(img.src)) stepDown(img);
+  }, true);
+
   // Desktop app: open external links in the system browser instead of inside the app window
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[target="_blank"]');

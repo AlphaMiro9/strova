@@ -5,6 +5,8 @@ Für Windows (x64 & ARM64), macOS, Linux (x64 & ARM64), Android und als Web-App 
 
 ---
 
+<p align="center"><a href="https://alphamiro9.github.io/strova/"><b>🌐 Website & Downloads</b></a> · <a href="https://alphamiro9.github.io/strova/app/"><b>▶ Im Browser öffnen</b></a></p>
+
 ## Funktionen
 
 **Videos**
@@ -38,7 +40,7 @@ Fertige Installer gibt es unter **[Releases](../../releases)**:
 | macOS (Apple Silicon & Intel) | `.dmg` |
 | Linux x64 / ARM64 | `.AppImage`, `.deb`, `.rpm` |
 | Android | `Strova-android.apk` |
-| iPhone / iPad / jeder Browser | Web-App über GitHub Pages öffnen → „Zum Home-Bildschirm“ |
+| iPhone / iPad / jeder Browser | [Web-App öffnen](https://alphamiro9.github.io/strova/app/) → „Zum Home-Bildschirm“ |
 
 > Die Android-APK ist mit einem Entwicklungsschlüssel signiert. Beim Installieren „Aus unbekannten Quellen“ erlauben.
 > macOS-Builds sind nicht notarisiert: beim ersten Start Rechtsklick → „Öffnen“.

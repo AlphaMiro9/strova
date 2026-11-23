@@ -1,10 +1,12 @@
-name: Web-App (GitHub Pages)
+name: Website & Web-App (GitHub Pages)
 
-# Publishes www/ as an installable web app (PWA) – works on iPhone, Android, PC and Mac.
+# Publishes the product website (site/) at the root and the web app (www/) under /app/.
 on:
   push:
     branches: [main]
-    paths: ['www/**', '.github/workflows/pages.yml']
+    paths: ['www/**', 'site/**', '.github/workflows/pages.yml']
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -24,11 +26,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p _site/app
+          cp -r site/. _site/
+          cp -r www/. _site/app/
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: www
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

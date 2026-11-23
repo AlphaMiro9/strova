@@ -95,18 +95,33 @@
     return m ? m[1] : u.replace(/^\//, '');
   };
 
+  // ───────── Image quality ─────────
+  // YouTube serves several sizes of the same image; APIs often hand out small ones. Ask for sharp versions;
+  // a global error handler (app.js) steps back down if a size doesn't exist for a video.
+  // Square album art (googleusercontent, "=w120-h120-…") → 544 px; video thumbnails → hq720
+  const hiThumb = (u) => (u || '')
+    .replace(/=w\d+-h\d+(-|$)/, '=w544-h544$1')
+    .replace(/\/(default|mqdefault|hqdefault|sddefault)(_live)?\.(jpg|webp)/, '/hq720$2.$3');
+  const maxThumb = (u) => hiThumb(u)
+    .replace(/=w544-h544(-|$)/, '=w1080-h1080$1')
+    .replace(/\/hq720(_live)?\.(jpg|webp)/, '/maxresdefault$1.$2');
+  const hiAvatar = (u) => (u || '').replace(/=s\d+(-|$)/, '=s240$1').replace(/\/s\d+(-c-k[^/]*)\//, '/s240$1/');
+  const hiBanner = (u) => (u || '').replace(/=w\d+(-|$)/, '=w2120$1');
+
   // ───────── Piped ─────────
   const P = {
     video(item) {
       return {
-        type: 'video', id: idFromUrl(item.url), title: item.title, thumbnail: item.thumbnail,
+        type: 'video', id: idFromUrl(item.url), title: item.title, thumbnail: hiThumb(item.thumbnail),
         uploaderName: item.uploaderName, uploaderUrl: item.uploaderUrl ? idFromUrl(item.uploaderUrl) : '',
-        uploaderAvatar: item.uploaderAvatar, verified: !!item.uploaderVerified, duration: item.duration, views: item.views,
-        uploadedDate: item.uploadedDate, uploaded: item.uploaded, isShort: !!item.isShort, live: item.duration === -1,
+        uploaderAvatar: hiAvatar(item.uploaderAvatar), verified: !!item.uploaderVerified, duration: item.duration, views: item.views,
+        uploadedDate: item.uploadedDate, uploaded: item.uploaded,
+        isShort: !!item.isShort || /\/shorts\//.test(item.url || '') || (item.duration > 0 && item.duration <= 60),
+        live: item.duration === -1,
       };
     },
     channel(item) {
-      return { type: 'channel', id: idFromUrl(item.url), name: item.name, avatar: item.thumbnail, verified: !!item.verified, subscribers: item.subscribers, videos: item.videos };
+      return { type: 'channel', id: idFromUrl(item.url), name: item.name, avatar: hiAvatar(item.thumbnail), verified: !!item.verified, subscribers: item.subscribers, videos: item.videos };
     },
     item(i) { return i.type === 'channel' ? P.channel(i) : i.type === 'playlist' ? null : P.video(i); },
     async trending(region) { return (await api('/trending?region=' + encodeURIComponent(region || 'DE'))).map(P.video); },
@@ -122,8 +137,8 @@
       const d = await api('/streams/' + encodeURIComponent(id));
       return {
         id, title: d.title, description: d.description || '', uploadDate: d.uploadDate,
-        uploaderName: d.uploader, uploaderUrl: idFromUrl(d.uploaderUrl), uploaderAvatar: d.uploaderAvatar, verified: !!d.uploaderVerified,
-        subscribers: d.uploaderSubscriberCount, thumbnail: d.thumbnailUrl, duration: d.duration, views: d.views, likes: d.likes,
+        uploaderName: d.uploader, uploaderUrl: idFromUrl(d.uploaderUrl), uploaderAvatar: hiAvatar(d.uploaderAvatar), verified: !!d.uploaderVerified,
+        subscribers: d.uploaderSubscriberCount, thumbnail: maxThumb(d.thumbnailUrl), duration: d.duration, views: d.views, likes: d.likes,
         live: !!d.livestream, hls: d.hls || null, videoStreams: d.videoStreams || [], audioStreams: d.audioStreams || [],
         subtitles: d.subtitles || [], chapters: d.chapters || [],
         related: (d.relatedStreams || []).filter(r => !r.type || r.type === 'stream').map(P.video),
@@ -136,7 +151,7 @@
       }
       const d = await api('/channel/' + encodeURIComponent(id));
       return {
-        id: d.id, name: d.name, avatar: d.avatarUrl, banner: d.bannerUrl, description: d.description || '',
+        id: d.id, name: d.name, avatar: hiAvatar(d.avatarUrl), banner: hiBanner(d.bannerUrl), description: d.description || '',
         subscribers: d.subscriberCount, verified: !!d.verified, videos: (d.relatedStreams || []).map(P.video), nextpage: d.nextpage || null,
       };
     },
@@ -158,11 +173,11 @@
     const p = prefer && arr.find(t => t.quality === prefer);
     return abs((p || arr.slice().sort((a, b) => (b.width || 0) - (a.width || 0))[0]).url);
   };
-  const thumbOf = (v) => best(v.videoThumbnails, 'medium') || `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`;
+  const thumbOf = (v) => hiThumb(best(v.videoThumbnails, 'high') || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`);
   const avatarOf = (arr) => {
     if (!arr || !arr.length) return '';
-    const s = arr.slice().sort((a, b) => (a.width || 0) - (b.width || 0)).find(t => (t.width || 0) >= 64) || arr[arr.length - 1];
-    return abs(s.url);
+    const s = arr.slice().sort((a, b) => (a.width || 0) - (b.width || 0)).find(t => (t.width || 0) >= 176) || arr.slice().sort((a, b) => (b.width || 0) - (a.width || 0))[0];
+    return hiAvatar(abs(s.url));
   };
   const SEARCH_TYPE = { all: 'all', videos: 'video', channels: 'channel', music_songs: 'video', music_artists: 'channel' };
   const I = {
@@ -171,7 +186,7 @@
         type: 'video', id: v.videoId, title: v.title, thumbnail: thumbOf(v),
         uploaderName: v.author, uploaderUrl: v.authorId || '', uploaderAvatar: avatarOf(v.authorThumbnails), verified: !!v.authorVerified,
         duration: v.lengthSeconds, views: v.viewCount, uploadedDate: v.publishedText || '', uploaded: v.published ? v.published * 1000 : 0,
-        isShort: v.lengthSeconds > 0 && v.lengthSeconds <= 60 && /#shorts/i.test(v.title || ''), live: !!v.liveNow,
+        isShort: v.lengthSeconds > 0 && v.lengthSeconds <= 60, live: !!v.liveNow,
       };
     },
     channel(c) {
@@ -245,16 +260,49 @@
     return true;
   }
 
+  /** Videos of a channel via search (keeps only results that really belong to the channel). */
+  async function channelViaSearch(id, name, nextpage) {
+    const r = await impl().search(name, 'videos', nextpage);
+    const videos = r.items.filter(v => v.type === 'video' && v.uploaderUrl === id);
+    return { videos, nextpage: r.nextpage && videos.length ? `search:${encodeURIComponent(name)}:${r.nextpage}` : null };
+  }
+
   const Piped = {
-    FALLBACK, instances, idFromUrl, backend, visible, isNativeApp,
+    FALLBACK, instances, idFromUrl, backend, visible, isNativeApp, hiThumb, maxThumb,
     async trending(region) { return (await impl().trending(region)).filter(visible); },
     async search(q, filter = 'all', nextpage) { const r = await impl().search(q, filter, nextpage); r.items = r.items.filter(visible); return r; },
     async suggestions(q) { try { return await impl().suggestions(q); } catch (e) { return []; } },
     async streams(id) { const d = await impl().streams(id); d.related = d.related.filter(visible); return d; },
-    async channel(id, nextpage) { const c = await impl().channel(id, nextpage); c.videos = c.videos.filter(v => !(Store.settings().hideShorts && v.isShort)); return c; },
+    async channel(id, nextpage) {
+      // "search:<name>:<page>" marks pagination of the search fallback below
+      if (nextpage && nextpage.startsWith('search:')) {
+        const [, name, np] = nextpage.match(/^search:(.*?):(.*)$/) || [];
+        const r = await channelViaSearch(id, decodeURIComponent(name || ''), np || undefined);
+        return { videos: r.videos.filter(v => !(Store.settings().hideShorts && v.isShort)), nextpage: r.nextpage };
+      }
+      const c = await impl().channel(id, nextpage);
+      // Some instances return channel pages without videos (YouTube changes) → fall back to a search by channel name.
+      if (!nextpage && !c.videos.length && c.name) {
+        try { const r = await channelViaSearch(id, c.name); c.videos = r.videos; c.nextpage = r.nextpage; } catch (e) { /* keep empty */ }
+      }
+      c.videos = c.videos.filter(v => !(Store.settings().hideShorts && v.isShort));
+      return c;
+    },
     async feed(ids) {
       if (!ids.length) return [];
-      const items = await impl().feed(ids);
+      let items = [];
+      try { items = await impl().feed(ids); } catch (e) { /* use fallback below */ }
+      // Top up channels the feed returned (almost) nothing for
+      const subs = Store.subs();
+      const thin = ids.filter(id => items.filter(v => v.uploaderUrl === id).length < 3).slice(0, 15);
+      if (thin.length) {
+        const extra = await Promise.all(thin.map(id => {
+          const s = subs.find(x => x.id === id);
+          return s && s.name ? channelViaSearch(id, s.name).then(r => r.videos.slice(0, 12)).catch(() => []) : [];
+        }));
+        const have = new Set(items.map(v => v.id));
+        extra.flat().forEach(v => { if (!have.has(v.id)) { have.add(v.id); items.push(v); } });
+      }
       return items.filter(visible).sort((a, b) => (b.uploaded || 0) - (a.uploaded || 0));
     },
   };

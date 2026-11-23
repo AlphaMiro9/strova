@@ -176,7 +176,7 @@ body.has-mbar .toast { bottom: 104px; }
 .m-radio .switch { width: 42px; height: 24px; }
 .m-radio .switch span::after { width: 16px; height: 16px; }
 .m-radio .switch input:checked + span::after { transform: translateX(18px); }
-body.sheet-open { overflow: hidden; }
+body.sheet-open, html:has(body.sheet-open) { overflow: hidden; }
 
 @media (max-width: 900px) {
   .mbar { left: 8px; right: 8px; bottom: calc(72px + env(safe-area-inset-bottom)); height: 64px; border-radius: 14px; }

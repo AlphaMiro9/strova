@@ -219,13 +219,17 @@
   // ── Rendering ──
   function render() {
     const t = current(); if (!t) return;
-    $all('.mbar-main img, .msheet-art img').forEach(img => { if (img.getAttribute('src') !== t.cover) img.src = t.cover; });
+    const big = window.Piped ? Piped.maxThumb(t.cover) : t.cover;
+    const mini = bar.querySelector('.mbar-main img'), art = sheet.querySelector('.msheet-art img');
+    if (mini.dataset.for !== t.id) { mini.dataset.for = t.id; mini.src = t.cover; }
+    if (art.dataset.for !== t.id) { art.dataset.for = t.id; art.src = big; }
     bar.querySelector('.mbar-text b').textContent = t.title;
     bar.querySelector('.mbar-text small').textContent = t.artist;
     sheet.querySelector('.msheet-titles h2').textContent = t.title;
     const a = sheet.querySelector('.msheet-artist');
     a.textContent = t.artist; a.href = t.artistId ? '#/channel/' + t.artistId : '#/music';
     sheet.querySelector('.msheet-bg').style.backgroundImage = `url("${t.cover.replace(/"/g, '')}")`;
+    if ('mediaSession' in navigator && navigator.mediaSession.metadata) navigator.mediaSession.metadata.artwork = [{ src: big, sizes: '1280x720' }];
     const liked = Library.isLiked(t.id);
     $all('.m-like').forEach(b => { b.classList.toggle('on', liked); b.setAttribute('aria-pressed', liked); });
     $all('.m-shuffle').forEach(b => b.classList.toggle('on', shuffle));

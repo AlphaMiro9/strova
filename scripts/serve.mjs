@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(fileURLToPath(new URL('../www', import.meta.url)));
+// Same layout as GitHub Pages: website at /, web app at /app/
+const www = resolve(fileURLToPath(new URL('../www', import.meta.url)));
+const site = resolve(fileURLToPath(new URL('../site', import.meta.url)));
 const port = Number(process.argv[2] || 5173);
 const types = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -12,7 +14,11 @@ const types = {
 };
 
 createServer(async (req, res) => {
-  const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  if (path === '/app') { res.writeHead(301, { Location: '/app/' }).end(); return; }
+  const inApp = path.startsWith('/app/');
+  const root = inApp ? www : site;
+  if (inApp) path = path.slice(4);
   const file = normalize(join(root, path.endsWith('/') ? path + 'index.html' : path));
   if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
   try {
