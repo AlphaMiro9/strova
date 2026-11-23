@@ -1,6 +1,6 @@
 [package]
 name = "strova"
-version = "1.1.0"
+version = "1.1.1"
 description = "Strova – YouTube & Musik ohne Tracking"
 license = "MIT"
 edition = "2021"

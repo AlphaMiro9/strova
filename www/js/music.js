@@ -204,7 +204,7 @@
     window.dispatchEvent(new Event('strova:music-play'));
     bar.classList.add('loading');
     let s = null;
-    try { s = await audioUrl(t.id); } catch (e) { s = null; }
+    try { s = await Promise.race([audioUrl(t.id), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000))]); } catch (e) { s = null; }
     if (loadingId !== t.id) return;
     if (s && s.url) {
       stopYT(); mode = 'audio';

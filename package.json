@@ -1,6 +1,6 @@
 {
   "name": "strova",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Strova – YouTube-Client über Piped mit eigenem Player und Stimmungen. Für Windows, macOS, Linux, Android und als Web-App.",
   "license": "MIT",

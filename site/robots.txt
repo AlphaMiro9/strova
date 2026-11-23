@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://alphamiro9.github.io/strova/sitemap.xml

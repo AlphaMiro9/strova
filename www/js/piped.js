@@ -38,10 +38,14 @@
 
   async function fetchJson(url, timeoutMs = 10000) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
+    let timer;
+    // hard deadline – the native HTTP client doesn't always honour the abort signal
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => { ctrl.abort(); const e = new Error('Zeitüberschreitung'); e.name = 'AbortError'; reject(e); }, timeoutMs);
+    });
+    const run = async () => {
       const res = tauriFetch
-        ? await tauriFetch(url, { method: 'GET', signal: ctrl.signal, connectTimeout: timeoutMs })
+        ? await tauriFetch(url, { method: 'GET', signal: ctrl.signal, connectTimeout: Math.min(timeoutMs, 5000) })
         : await fetch(url, { signal: ctrl.signal, referrerPolicy: 'no-referrer' });
       if (!res.ok) {
         let msg = 'HTTP ' + res.status;
@@ -51,18 +55,20 @@
       const data = await res.json();
       if (data && data.error && !Array.isArray(data)) { const err = new Error(data.message || data.error); err.status = 500; throw err; }
       return data;
-    } finally { clearTimeout(timer); }
+    };
+    try { return await Promise.race([run(), deadline]); }
+    finally { clearTimeout(timer); }
   }
 
   async function instances(b = backend()) {
     if (instanceLists[b]) return instanceLists[b];
     try {
       if (b === 'invidious') {
-        const list = await fetchJson('https://api.invidious.io/instances.json?sort_by=health', 8000);
+        const list = await fetchJson('https://api.invidious.io/instances.json?sort_by=health', 4000);
         instanceLists[b] = list.filter(([, i]) => i.type === 'https' && i.api && i.cors !== false)
           .map(([host, i]) => ({ name: host, url: i.uri.replace(/\/$/, ''), locations: i.region || '' }));
       } else {
-        const list = await fetchJson('https://piped-instances.kavin.rocks/', 8000);
+        const list = await fetchJson('https://piped-instances.kavin.rocks/', 4000);
         instanceLists[b] = list.filter(i => i.api_url).map(i => ({ name: i.name, url: i.api_url.replace(/\/$/, ''), locations: i.locations || '' }));
       }
       if (!instanceLists[b].length) throw new Error('empty');

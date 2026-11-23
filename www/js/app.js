@@ -234,7 +234,8 @@
     </div>`, 'watch-mode');
     let d;
     try {
-      d = await Piped.streams(id);
+      // never wait longer than 10 s for the servers – then the official player takes over
+      d = await Promise.race([Piped.streams(id), new Promise((_, rej) => setTimeout(() => rej(new Error('Zeitüberschreitung')), 10000))]);
     } catch (err) {
       if (token !== routeToken) return;
       // Every source is blocked → play with YouTube's official embedded player instead.
@@ -986,7 +987,7 @@
     if (a && opener && /^https?:/i.test(a.href)) { e.preventDefault(); opener.openUrl(a.href); }
   });
 
-  window.STROVA_VERSION = '1.1.0';
+  window.STROVA_VERSION = '1.1.1';
   applyTheme();
   route();
 
